@@ -1,0 +1,14 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Single-user lockdown rule:
+    // Only permit access if the authenticated user matches the owner ID.
+    // Replace YOUR_EMAIL@gmail.com with your authorized Google email address.
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null 
+                         && request.auth.uid == userId;
+                         // To restrict to only your specific email, uncomment:
+                         // && request.auth.token.email == 'YOUR_EMAIL@gmail.com';
+    }
+  }
+}
