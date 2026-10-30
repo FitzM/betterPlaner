@@ -9,6 +9,7 @@ import '../../providers/project_providers.dart';
 import '../../providers/task_providers.dart';
 import 'add_project_dialog.dart';
 import '../settings/settings_dialog.dart';
+import '../settings/ticktick_import_dialog.dart';
 
 class ProjectSidebar extends ConsumerWidget {
   final double? width;
@@ -22,16 +23,7 @@ class ProjectSidebar extends ConsumerWidget {
     final activeFilter = ref.watch(taskFilterProvider);
     final viewMode = ref.watch(viewModeProvider);
     final authState = ref.watch(authProvider);
-    final allTasksAsync = ref.watch(tasksStreamProvider);
-
-    final allTasks = allTasksAsync.value ?? [];
-    final unscheduledCount = allTasks.where((t) => !t.isCompleted && !t.isTimeBlocked).length;
-    final todayCount = allTasks.where((t) {
-      if (t.isCompleted) return false;
-      if (t.scheduledStart != null && TimeUtils.isToday(t.scheduledStart!)) return true;
-      if (t.dueDate != null && TimeUtils.isToday(t.dueDate!)) return true;
-      return false;
-    }).length;
+    final sidebarCounts = ref.watch(sidebarCountsProvider);
 
     return Container(
       width: width ?? 240,
@@ -158,7 +150,7 @@ class ProjectSidebar extends ConsumerWidget {
               ref.read(selectedProjectIdProvider.notifier).select(null);
               ref.read(taskFilterProvider.notifier).setFilter(TaskFilter.all);
             },
-            badgeCount: allTasks.where((t) => !t.isCompleted).length,
+            badgeCount: sidebarCounts.allCount,
             isDark: isDark,
           ),
           _buildNavItem(
@@ -169,7 +161,7 @@ class ProjectSidebar extends ConsumerWidget {
               ref.read(selectedProjectIdProvider.notifier).select(null);
               ref.read(taskFilterProvider.notifier).setFilter(TaskFilter.today);
             },
-            badgeCount: todayCount,
+            badgeCount: sidebarCounts.todayCount,
             isDark: isDark,
           ),
           _buildNavItem(
@@ -180,7 +172,7 @@ class ProjectSidebar extends ConsumerWidget {
               ref.read(selectedProjectIdProvider.notifier).select(null);
               ref.read(taskFilterProvider.notifier).setFilter(TaskFilter.unscheduled);
             },
-            badgeCount: unscheduledCount,
+            badgeCount: sidebarCounts.unscheduledCount,
             badgeColor: PlanColors.primary,
             isDark: isDark,
           ),
@@ -242,16 +234,15 @@ class ProjectSidebar extends ConsumerWidget {
           // Project List
           Expanded(
             child: projectsAsync.when(
-              data: (projects) {
+              data: (rawProjects) {
+                final projects = rawProjects.where((p) => p.isValidProjectName).toList();
                 return ListView.builder(
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   itemCount: projects.length,
                   itemBuilder: (context, index) {
                     final project = projects[index];
                     final isSelected = selectedProjectId == project.id;
-                    final projectTaskCount = allTasks
-                        .where((t) => t.projectId == project.id && !t.isCompleted)
-                        .length;
+                    final projectTaskCount = sidebarCounts.projectCounts[project.id] ?? 0;
 
                     return Padding(
                       padding: const EdgeInsets.symmetric(vertical: 1),
@@ -331,6 +322,34 @@ class ProjectSidebar extends ConsumerWidget {
               error: (err, _) => Padding(
                 padding: const EdgeInsets.all(12),
                 child: Text('Error: $err', style: const TextStyle(fontSize: 11, color: Colors.red)),
+              ),
+            ),
+          ),
+
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            child: InkWell(
+              onTap: () => TickTickImportDialog.show(context),
+              borderRadius: BorderRadius.circular(6),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: Row(
+                  children: [
+                    const Icon(Icons.download_rounded, size: 14, color: Color(0xFF388E3C)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Import from TickTick',
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? PlanColors.darkTextSecondary : PlanColors.lightTextSecondary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

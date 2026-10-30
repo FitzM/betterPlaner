@@ -5,9 +5,12 @@ import '../models/view_mode.dart';
 import '../providers/auth_provider.dart';
 import '../providers/calendar_providers.dart';
 import '../providers/layout_providers.dart';
+import '../providers/task_providers.dart';
 import '../widgets/calendar/calendar_grid_pane.dart';
 import '../widgets/common/resizable_divider.dart';
+import '../widgets/settings/firebase_setup_dialog.dart';
 import '../widgets/sidebar/project_sidebar.dart';
+import '../widgets/tasks/floating_task_inspector.dart';
 import '../widgets/tasks/task_board_pane.dart';
 import '../widgets/tasks/task_list_pane.dart';
 
@@ -28,6 +31,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final sidebarWidth = ref.watch(sidebarWidthProvider);
     final taskPaneWidth = ref.watch(taskPaneWidthProvider);
     final layoutMode = ref.watch(dashboardLayoutModeProvider);
+    final activeInspectorTask = ref.watch(activeInspectorTaskProvider);
 
     return Scaffold(
       backgroundColor: isDark ? PlanColors.darkBg : PlanColors.lightBg,
@@ -50,8 +54,24 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         style: const TextStyle(fontSize: 12, color: Colors.brown),
                       ),
                     ),
+                    const SizedBox(width: 8),
+                    TextButton.icon(
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        foregroundColor: Colors.brown.shade900,
+                      ),
+                      icon: const Icon(Icons.settings, size: 14),
+                      label: const Text(
+                        'Setup Firebase',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                      ),
+                      onPressed: () => FirebaseSetupDialog.show(context),
+                    ),
+                    const SizedBox(width: 8),
                     InkWell(
-                      onTap: () => ref.read(authProvider.notifier).enterDemoMode(),
+                      onTap: () => ref.read(authProvider.notifier).dismissError(),
                       child: const Text(
                         'Dismiss',
                         style: TextStyle(
@@ -65,97 +85,114 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 ),
               ),
 
-            // Main Responsive Body with Resizable Splitters
+            // Main Responsive Body with Resizable Splitters & Floating Inspector Overlay
             Expanded(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  // Desktop / Large Web View (Width > 850px)
-                  if (constraints.maxWidth >= 850) {
-                    if (layoutMode == DashboardLayoutMode.multiColumnBoard) {
-                      return Row(
-                        children: [
-                          ProjectSidebar(width: sidebarWidth),
-                          ResizableDivider(
-                            onDelta: (dx) =>
-                                ref.read(sidebarWidthProvider.notifier).adjust(dx),
-                            onDoubleTap: () =>
-                                ref.read(sidebarWidthProvider.notifier).reset(),
-                          ),
-                          const TaskBoardPane(),
-                          ResizableDivider(
-                            onDelta: (dx) =>
-                                ref.read(taskPaneWidthProvider.notifier).adjust(dx),
-                            onDoubleTap: () =>
-                                ref.read(taskPaneWidthProvider.notifier).reset(),
-                          ),
-                          CalendarGridPane(width: taskPaneWidth),
-                        ],
-                      );
-                    }
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Positioned.fill(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        // Desktop / Large Web View (Width > 850px)
+                        if (constraints.maxWidth >= 850) {
+                          if (layoutMode == DashboardLayoutMode.multiColumnBoard) {
+                            return Row(
+                              children: [
+                                ProjectSidebar(width: sidebarWidth),
+                                ResizableDivider(
+                                  onDelta: (dx) =>
+                                      ref.read(sidebarWidthProvider.notifier).adjust(dx),
+                                  onDoubleTap: () =>
+                                      ref.read(sidebarWidthProvider.notifier).reset(),
+                                ),
+                                const TaskBoardPane(),
+                                ResizableDivider(
+                                  onDelta: (dx) =>
+                                      ref.read(taskPaneWidthProvider.notifier).adjust(dx),
+                                  onDoubleTap: () =>
+                                      ref.read(taskPaneWidthProvider.notifier).reset(),
+                                ),
+                                CalendarGridPane(width: taskPaneWidth),
+                              ],
+                            );
+                          }
 
-                    return Row(
-                      children: [
-                        ProjectSidebar(width: sidebarWidth),
-                        ResizableDivider(
-                          onDelta: (dx) =>
-                              ref.read(sidebarWidthProvider.notifier).adjust(dx),
-                          onDoubleTap: () =>
-                              ref.read(sidebarWidthProvider.notifier).reset(),
-                        ),
-                        TaskListPane(width: taskPaneWidth),
-                        ResizableDivider(
-                          onDelta: (dx) =>
-                              ref.read(taskPaneWidthProvider.notifier).adjust(dx),
-                          onDoubleTap: () =>
-                              ref.read(taskPaneWidthProvider.notifier).reset(),
-                        ),
-                        const CalendarGridPane(),
-                      ],
-                    );
-                  }
+                          return Row(
+                            children: [
+                              ProjectSidebar(width: sidebarWidth),
+                              ResizableDivider(
+                                onDelta: (dx) =>
+                                    ref.read(sidebarWidthProvider.notifier).adjust(dx),
+                                onDoubleTap: () =>
+                                    ref.read(sidebarWidthProvider.notifier).reset(),
+                              ),
+                              TaskListPane(width: taskPaneWidth),
+                              ResizableDivider(
+                                onDelta: (dx) =>
+                                    ref.read(taskPaneWidthProvider.notifier).adjust(dx),
+                                onDoubleTap: () =>
+                                    ref.read(taskPaneWidthProvider.notifier).reset(),
+                              ),
+                              const CalendarGridPane(),
+                            ],
+                          );
+                        }
 
-                  // Tablet View (600px - 850px)
-                  if (constraints.maxWidth >= 600) {
-                    if (layoutMode == DashboardLayoutMode.multiColumnBoard) {
-                      return Row(
-                        children: [
-                          const TaskBoardPane(),
-                          ResizableDivider(
-                            onDelta: (dx) =>
-                                ref.read(taskPaneWidthProvider.notifier).adjust(dx),
-                            onDoubleTap: () =>
-                                ref.read(taskPaneWidthProvider.notifier).reset(),
-                          ),
-                          CalendarGridPane(width: taskPaneWidth),
-                        ],
-                      );
-                    }
+                        // Tablet View (600px - 850px)
+                        if (constraints.maxWidth >= 600) {
+                          if (layoutMode == DashboardLayoutMode.multiColumnBoard) {
+                            return Row(
+                              children: [
+                                const TaskBoardPane(),
+                                ResizableDivider(
+                                  onDelta: (dx) =>
+                                      ref.read(taskPaneWidthProvider.notifier).adjust(dx),
+                                  onDoubleTap: () =>
+                                      ref.read(taskPaneWidthProvider.notifier).reset(),
+                                ),
+                                CalendarGridPane(width: taskPaneWidth),
+                              ],
+                            );
+                          }
 
-                    return Row(
-                      children: [
-                        TaskListPane(width: taskPaneWidth),
-                        ResizableDivider(
-                          onDelta: (dx) =>
-                              ref.read(taskPaneWidthProvider.notifier).adjust(dx),
-                          onDoubleTap: () =>
-                              ref.read(taskPaneWidthProvider.notifier).reset(),
-                        ),
-                        const CalendarGridPane(),
-                      ],
-                    );
-                  }
+                          return Row(
+                            children: [
+                              TaskListPane(width: taskPaneWidth),
+                              ResizableDivider(
+                                onDelta: (dx) =>
+                                    ref.read(taskPaneWidthProvider.notifier).adjust(dx),
+                                onDoubleTap: () =>
+                                    ref.read(taskPaneWidthProvider.notifier).reset(),
+                              ),
+                              const CalendarGridPane(),
+                            ],
+                          );
+                        }
 
-                  // Mobile View (< 600px)
-                  return IndexedStack(
-                    index: _mobileTabIndex,
-                    children: [
-                      layoutMode == DashboardLayoutMode.multiColumnBoard
-                          ? const TaskBoardPane()
-                          : const TaskListPane(),
-                      const CalendarGridPane(),
-                    ],
-                  );
-                },
+                        // Mobile View (< 600px)
+                        return IndexedStack(
+                          index: _mobileTabIndex,
+                          children: [
+                            layoutMode == DashboardLayoutMode.multiColumnBoard
+                                ? const TaskBoardPane()
+                                : const TaskListPane(),
+                            const CalendarGridPane(),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+
+                  // Floating Movable & Resizable Inspector Overlay (TickTick style)
+                  if (activeInspectorTask != null)
+                    FloatingTaskInspector(
+                      key: ValueKey('inspector_${activeInspectorTask.id}'),
+                      task: activeInspectorTask,
+                      onClose: () {
+                        ref.read(activeInspectorTaskIdProvider.notifier).state = null;
+                      },
+                    ),
+                ],
               ),
             ),
           ],

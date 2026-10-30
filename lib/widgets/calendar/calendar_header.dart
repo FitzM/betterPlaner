@@ -66,92 +66,95 @@ class CalendarHeader extends ConsumerWidget {
             children: [
               // Navigation controls
               Expanded(
-                child: Row(
-                  children: [
-                    // Today Button / Icon
-                    if (!isNarrow) ...[
-                      OutlinedButton(
-                        onPressed: () {
-                          final now = DateTime.now();
-                          ref.read(selectedDateProvider.notifier).setDate(
-                                DateTime(now.year, now.month, now.day),
-                              );
-                        },
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          side: BorderSide(
-                            color: isDark ? PlanColors.darkBorder : PlanColors.lightBorder,
-                          ),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                        ),
-                        child: Text(
-                          'Today',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: isDark ? PlanColors.darkTextPrimary : PlanColors.lightTextPrimary,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                    ] else ...[
-                      Tooltip(
-                        message: 'Today',
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(4),
-                          onTap: () {
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  physics: const ClampingScrollPhysics(),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Today Button / Icon
+                      if (!isNarrow) ...[
+                        OutlinedButton(
+                          onPressed: () {
                             final now = DateTime.now();
                             ref.read(selectedDateProvider.notifier).setDate(
                                   DateTime(now.year, now.month, now.day),
                                 );
                           },
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            side: BorderSide(
+                              color: isDark ? PlanColors.darkBorder : PlanColors.lightBorder,
+                            ),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                          ),
+                          child: Text(
+                            'Today',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? PlanColors.darkTextPrimary : PlanColors.lightTextPrimary,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                      ] else ...[
+                        Tooltip(
+                          message: 'Today',
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(4),
+                            onTap: () {
+                              final now = DateTime.now();
+                              ref.read(selectedDateProvider.notifier).setDate(
+                                    DateTime(now.year, now.month, now.day),
+                                  );
+                            },
+                            child: const Padding(
+                              padding: EdgeInsets.all(4),
+                              child: Icon(Icons.today_rounded, size: 16),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                      ],
+
+                      // Prev / Next arrows
+                      Tooltip(
+                        message: 'Previous',
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(4),
+                          onTap: () {
+                            final step = viewMode.dayCount;
+                            ref.read(selectedDateProvider.notifier).setDate(
+                                  selectedDate.subtract(Duration(days: step)),
+                                );
+                          },
                           child: const Padding(
                             padding: EdgeInsets.all(4),
-                            child: Icon(Icons.today_rounded, size: 16),
+                            child: Icon(Icons.chevron_left_rounded, size: 18),
                           ),
                         ),
                       ),
-                      const SizedBox(width: 4),
-                    ],
-
-                    // Prev / Next arrows
-                    Tooltip(
-                      message: 'Previous',
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(4),
-                        onTap: () {
-                          final step = viewMode.dayCount;
-                          ref.read(selectedDateProvider.notifier).setDate(
-                                selectedDate.subtract(Duration(days: step)),
-                              );
-                        },
-                        child: const Padding(
-                          padding: EdgeInsets.all(4),
-                          child: Icon(Icons.chevron_left_rounded, size: 18),
+                      Tooltip(
+                        message: 'Next',
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(4),
+                          onTap: () {
+                            final step = viewMode.dayCount;
+                            ref.read(selectedDateProvider.notifier).setDate(
+                                  selectedDate.add(Duration(days: step)),
+                                );
+                          },
+                          child: const Padding(
+                            padding: EdgeInsets.all(4),
+                            child: Icon(Icons.chevron_right_rounded, size: 18),
+                          ),
                         ),
                       ),
-                    ),
-                    Tooltip(
-                      message: 'Next',
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(4),
-                        onTap: () {
-                          final step = viewMode.dayCount;
-                          ref.read(selectedDateProvider.notifier).setDate(
-                                selectedDate.add(Duration(days: step)),
-                              );
-                        },
-                        child: const Padding(
-                          padding: EdgeInsets.all(4),
-                          child: Icon(Icons.chevron_right_rounded, size: 18),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
+                      const SizedBox(width: 6),
 
-                    // Date Text with safe truncation
-                    Expanded(
-                      child: Text(
+                      // Date Text
+                      Text(
                         titleText,
                         maxLines: 1,
                         style: TextStyle(
@@ -160,10 +163,9 @@ class CalendarHeader extends ConsumerWidget {
                           letterSpacing: -0.2,
                           color: isDark ? PlanColors.darkTextPrimary : PlanColors.lightTextPrimary,
                         ),
-                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(width: 6),

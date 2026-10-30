@@ -6,7 +6,6 @@ import '../../models/task_item.dart';
 import '../../providers/project_providers.dart';
 import '../../providers/settings_provider.dart';
 import '../../providers/task_providers.dart';
-import '../tasks/task_detail_modal.dart';
 
 class ScheduledTaskBlock extends ConsumerStatefulWidget {
   final TaskItem task;
@@ -38,6 +37,13 @@ class _ScheduledTaskBlockState extends ConsumerState<ScheduledTaskBlock> {
     final project = projectMap[widget.task.projectId];
     final projectColor = project?.color ?? PlanColors.projectPalette[0];
     final snapStep = ref.watch(settingsProvider).timeSnapMinutes;
+
+    final linkedTasks = widget.task.hasLinkedFilter
+        ? ref.watch(filterWindowTasksProvider(widget.task))
+        : const <TaskItem>[];
+    final linkedProject = widget.task.linkedProjectId != null
+        ? projectMap[widget.task.linkedProjectId]
+        : null;
 
     final start = widget.task.scheduledStart ?? DateTime.now();
     final initialDuration = widget.task.estimatedMinutes > 0 ? widget.task.estimatedMinutes : 30;
@@ -209,46 +215,73 @@ class _ScheduledTaskBlockState extends ConsumerState<ScheduledTaskBlock> {
                         ),
                       ),
 
-                    // Task Info (Tapping opens modal)
+                    // Task Info (Tapping opens floating inspector overlay)
                     Expanded(
-                      child: InkWell(
-                        onTap: () => TaskDetailModal.show(context, task: widget.task),
-                        borderRadius: BorderRadius.circular(4),
-                        child: isCompact
-                            ? Row(
-                                children: [
-                                  if (widget.task.isSubtask) ...[
-                                    const Icon(
-                                      Icons.subdirectory_arrow_right_rounded,
-                                      size: 11,
-                                      color: PlanColors.primary,
-                                    ),
-                                    const SizedBox(width: 2),
-                                  ],
-                                  Text(
-                                    '${TimeUtils.formatRange(effectiveStart, effectiveEnd)}  ',
-                                    style: TextStyle(
-                                      fontSize: 9.5,
-                                      fontWeight: FontWeight.w700,
-                                      color: projectColor,
-                                    ),
-                                  ),
-                                  Expanded(
-                                    child: Text(
-                                      widget.task.title,
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                        decoration: widget.task.isCompleted ? TextDecoration.lineThrough : null,
-                                        color: widget.task.isCompleted
-                                            ? (isDark ? PlanColors.darkTextMuted : PlanColors.lightTextMuted)
-                                            : (isDark ? PlanColors.darkTextPrimary : PlanColors.lightTextPrimary),
+                      child: Builder(
+                        builder: (blockContext) => InkWell(
+                          onTap: () {
+                            final renderBox = blockContext.findRenderObject() as RenderBox?;
+                            Rect? anchorRect;
+                            if (renderBox != null && renderBox.hasSize) {
+                              final offset = renderBox.localToGlobal(Offset.zero);
+                              anchorRect = offset & renderBox.size;
+                            }
+                            ref.read(activeInspectorSessionProvider.notifier).openTask(
+                                  widget.task.id,
+                                  source: InspectorSource.calendar,
+                                  anchorRect: anchorRect,
+                                );
+                          },
+                          borderRadius: BorderRadius.circular(4),
+                          child: isCompact
+                            ? ClipRect(
+                                child: Row(
+                                  children: [
+                                    if (widget.task.isSubtask) ...[
+                                      const Icon(
+                                        Icons.subdirectory_arrow_right_rounded,
+                                        size: 11,
+                                        color: PlanColors.primary,
                                       ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
+                                      const SizedBox(width: 2),
+                                    ],
+                                    if (widget.task.hasLinkedFilter) ...[
+                                      Icon(
+                                        Icons.link_rounded,
+                                        size: 11,
+                                        color: linkedProject?.color ?? PlanColors.primary,
+                                      ),
+                                      const SizedBox(width: 3),
+                                    ],
+                                    Flexible(
+                                      child: Text(
+                                        '${TimeUtils.formatRange(effectiveStart, effectiveEnd)}  ',
+                                        overflow: TextOverflow.ellipsis,
+                                        maxLines: 1,
+                                        style: TextStyle(
+                                          fontSize: 9.5,
+                                          fontWeight: FontWeight.w700,
+                                          color: projectColor,
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                    Expanded(
+                                      child: Text(
+                                        widget.task.title,
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          decoration: widget.task.isCompleted ? TextDecoration.lineThrough : null,
+                                          color: widget.task.isCompleted
+                                              ? (isDark ? PlanColors.darkTextMuted : PlanColors.lightTextMuted)
+                                              : (isDark ? PlanColors.darkTextPrimary : PlanColors.lightTextPrimary),
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               )
                             : Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -293,8 +326,41 @@ class _ScheduledTaskBlockState extends ConsumerState<ScheduledTaskBlock> {
                                       ),
                                     ],
                                   ),
+                                  if (widget.task.hasLinkedFilter && effectiveHeight >= 44) ...[
+                                    const SizedBox(height: 3),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                      decoration: BoxDecoration(
+                                        color: (linkedProject?.color ?? PlanColors.primary).withValues(alpha: 0.15),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.link_rounded,
+                                            size: 9.5,
+                                            color: linkedProject?.color ?? PlanColors.primary,
+                                          ),
+                                          const SizedBox(width: 3),
+                                          Flexible(
+                                            child: Text(
+                                              '${linkedProject?.name ?? "Tasks"} (${linkedTasks.where((t) => t.isCompleted).length}/${linkedTasks.length})',
+                                              style: TextStyle(
+                                                fontSize: 9,
+                                                fontWeight: FontWeight.bold,
+                                                color: linkedProject?.color ?? PlanColors.primary,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ),
+                        ),
                       ),
                     ),
 

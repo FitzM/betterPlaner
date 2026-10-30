@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -76,8 +77,36 @@ class AuthNotifier extends Notifier<AuthState> {
     );
   }
 
+  void dismissError() {
+    state = state.copyWith(errorMessage: null);
+  }
+
+  Future<bool> initializeFirebaseWithOptions(FirebaseOptions options) async {
+    try {
+      if (Firebase.apps.isNotEmpty) {
+        await Firebase.app().delete();
+      }
+      await Firebase.initializeApp(options: options);
+      state = state.copyWith(errorMessage: null);
+      return true;
+    } catch (e) {
+      state = state.copyWith(
+        errorMessage: 'Firebase initialization failed: $e',
+      );
+      return false;
+    }
+  }
+
   Future<void> signInWithGoogle() async {
     state = state.copyWith(isLoading: true, errorMessage: null);
+
+    if (Firebase.apps.isEmpty) {
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: 'Firebase has not been connected to a project yet. Configure your Firebase project in Settings > Firebase Setup or continue in Local Mode.',
+      );
+      return;
+    }
 
     try {
       GoogleAuthProvider authProvider = GoogleAuthProvider();

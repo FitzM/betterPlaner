@@ -6,6 +6,8 @@ import '../../core/utils/time_utils.dart';
 import '../../models/task_item.dart';
 import '../../providers/project_providers.dart';
 import '../../providers/task_providers.dart';
+import 'compact_time_picker_popup.dart';
+import 'filter_window_pane.dart';
 
 class TaskDetailModal extends ConsumerStatefulWidget {
   final TaskItem? task;
@@ -58,9 +60,17 @@ class _TaskDetailModalState extends ConsumerState<TaskDetailModal> {
   late String _priority;
   DateTime? _scheduledStart;
   DateTime? _scheduledEnd;
+  DateTime? _dueDate;
   late bool _isTimeBlocked;
+  late bool _isAllDay;
   late bool _isCompleted;
   String? _parentTaskId;
+
+  // Filter Window (Symlink) fields
+  bool _isFilterWindowEnabled = false;
+  String? _linkedProjectId;
+  String? _linkedTag;
+  String? _linkedSection;
 
   @override
   void initState() {
@@ -79,9 +89,17 @@ class _TaskDetailModalState extends ConsumerState<TaskDetailModal> {
 
     _scheduledStart = task?.scheduledStart ?? widget.initialStart;
     _scheduledEnd = task?.scheduledEnd ?? widget.initialEnd;
-    _isTimeBlocked = task?.isTimeBlocked ?? (_scheduledStart != null);
+    _dueDate = task?.dueDate;
+    _isAllDay = task?.isAllDay ??
+        (widget.initialStart != null && widget.initialEnd != null && widget.initialStart == widget.initialEnd);
+    _isTimeBlocked = task?.isTimeBlocked ?? (_scheduledStart != null && !_isAllDay);
     _isCompleted = task?.isCompleted ?? false;
     _parentTaskId = task?.parentTaskId ?? widget.parentTaskId;
+
+    _isFilterWindowEnabled = task?.hasLinkedFilter ?? false;
+    _linkedProjectId = task?.linkedProjectId;
+    _linkedTag = task?.linkedTag;
+    _linkedSection = task?.linkedSection;
   }
 
   @override
@@ -98,6 +116,20 @@ class _TaskDetailModalState extends ConsumerState<TaskDetailModal> {
 
     final controller = ref.read(taskControllerProvider);
 
+    DateTime? finalStart = _scheduledStart;
+    DateTime? finalEnd = _scheduledEnd;
+    DateTime? finalDue;
+
+    if (_isAllDay) {
+      final baseDate = _scheduledStart ?? DateTime.now();
+      finalStart = DateTime(baseDate.year, baseDate.month, baseDate.day);
+      finalEnd = DateTime(baseDate.year, baseDate.month, baseDate.day, 23, 59, 59);
+      finalDue = finalStart;
+    } else if (_isTimeBlocked && finalStart != null) {
+      finalEnd ??= finalStart.add(Duration(minutes: _estimatedMinutes));
+      finalDue = finalStart;
+    }
+
     if (widget.task == null) {
       // Create new task
       await controller.addTask(
@@ -106,10 +138,15 @@ class _TaskDetailModalState extends ConsumerState<TaskDetailModal> {
         projectId: _selectedProjectId,
         estimatedMinutes: _estimatedMinutes,
         priority: _priority,
+        dueDate: finalDue,
         parentTaskId: _parentTaskId,
-        scheduledStart: _scheduledStart,
-        scheduledEnd: _scheduledEnd,
-        isTimeBlocked: _isTimeBlocked,
+        scheduledStart: finalStart,
+        scheduledEnd: finalEnd,
+        isTimeBlocked: _isTimeBlocked && !_isAllDay,
+        isAllDay: _isAllDay,
+        linkedProjectId: _isFilterWindowEnabled ? _linkedProjectId : null,
+        linkedTag: _isFilterWindowEnabled ? _linkedTag : null,
+        linkedSection: _isFilterWindowEnabled ? _linkedSection : null,
       );
     } else {
       // Update existing task
@@ -119,12 +156,18 @@ class _TaskDetailModalState extends ConsumerState<TaskDetailModal> {
         projectId: _selectedProjectId,
         estimatedMinutes: _estimatedMinutes,
         priority: _priority,
+        dueDate: finalDue,
         parentTaskId: _parentTaskId,
         isCompleted: _isCompleted,
-        isTimeBlocked: _isTimeBlocked,
-        scheduledStart: _scheduledStart,
-        scheduledEnd: _scheduledEnd,
-        clearScheduledTimes: !_isTimeBlocked,
+        isTimeBlocked: _isTimeBlocked && !_isAllDay,
+        isAllDay: _isAllDay,
+        scheduledStart: finalStart,
+        scheduledEnd: finalEnd,
+        clearScheduledTimes: !_isTimeBlocked && !_isAllDay,
+        linkedProjectId: _isFilterWindowEnabled ? _linkedProjectId : null,
+        linkedTag: _isFilterWindowEnabled ? _linkedTag : null,
+        linkedSection: _isFilterWindowEnabled ? _linkedSection : null,
+        clearLinkedFilter: !_isFilterWindowEnabled,
       );
       await controller.updateTask(updated);
     }
@@ -149,6 +192,83 @@ class _TaskDetailModalState extends ConsumerState<TaskDetailModal> {
     }
   }
 
+  Future<void> _pickDateTime() async {
+    final result = await CompactTimePickerPopup.show(
+      context,
+      initialDate: _scheduledStart ?? _dueDate ?? DateTime.now(),
+      initialIsAllDay: _isAllDay,
+      initialIsTimeBlocked: _isTimeBlocked,
+      initialStart: _scheduledStart,
+      initialEnd: _scheduledEnd,
+      initialDurationMinutes: _estimatedMinutes,
+    );
+
+    if (result == null) return;
+
+    setState(() {
+      if (!result.isTimeBlocked && !result.isAllDay) {
+        _isTimeBlocked = false;
+        _isAllDay = false;
+        _scheduledStart = null;
+        _scheduledEnd = null;
+        _dueDate = null;
+      } else if (result.isAllDay) {
+        _isAllDay = true;
+        _isTimeBlocked = false;
+        _scheduledStart = result.date ?? DateTime.now();
+        _scheduledEnd = null;
+        _dueDate = result.date;
+      } else {
+        _isTimeBlocked = true;
+        _isAllDay = false;
+        _scheduledStart = result.start;
+        _scheduledEnd = result.end;
+        _estimatedMinutes = result.durationMinutes;
+        _dueDate = result.date;
+      }
+    });
+  }
+
+  String _getScheduleSummaryText() {
+    if (_isAllDay && _scheduledStart != null) {
+      final now = DateTime.now();
+      final isToday = _scheduledStart!.year == now.year &&
+          _scheduledStart!.month == now.month &&
+          _scheduledStart!.day == now.day;
+      if (isToday) return 'Today (Anytime)';
+      return '${DateFormat("EEE, MMM d").format(_scheduledStart!)} (Anytime)';
+    }
+
+    if (_isTimeBlocked && _scheduledStart != null) {
+      final end = _scheduledEnd ?? _scheduledStart!.add(Duration(minutes: _estimatedMinutes));
+      final timeRange = TimeUtils.formatRange(_scheduledStart!, end);
+      final now = DateTime.now();
+      final isToday = _scheduledStart!.year == now.year &&
+          _scheduledStart!.month == now.month &&
+          _scheduledStart!.day == now.day;
+      if (isToday) return 'Today, $timeRange (${_estimatedMinutes}m)';
+      return '${DateFormat("MMM d").format(_scheduledStart!)}, $timeRange (${_estimatedMinutes}m)';
+    }
+
+    if (_dueDate != null) {
+      return 'Due ${DateFormat("MMM d").format(_dueDate!)}';
+    }
+
+    return 'Unscheduled (Click to set time)';
+  }
+
+  TaskItem _buildPreviewTask() {
+    return (widget.task ?? TaskItem(
+      id: 'preview_task',
+      title: _titleController.text.trim().isEmpty ? 'Event' : _titleController.text.trim(),
+      projectId: _selectedProjectId,
+    )).copyWith(
+      linkedProjectId: _linkedProjectId,
+      linkedTag: _linkedTag,
+      linkedSection: _linkedSection,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -166,7 +286,7 @@ class _TaskDetailModalState extends ConsumerState<TaskDetailModal> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 540, maxHeight: 720),
+        constraints: const BoxConstraints(maxWidth: 620, maxHeight: 760),
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -211,7 +331,7 @@ class _TaskDetailModalState extends ConsumerState<TaskDetailModal> {
                     const Spacer(),
                   ] else ...[
                     Text(
-                      widget.task == null ? 'Create Task' : 'Task Details',
+                      widget.task == null ? 'Create Task / Event' : 'Task Details',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
@@ -247,7 +367,7 @@ class _TaskDetailModalState extends ConsumerState<TaskDetailModal> {
                           color: isDark ? PlanColors.darkTextPrimary : PlanColors.lightTextPrimary,
                         ),
                         decoration: InputDecoration(
-                          hintText: 'What needs to be done?',
+                          hintText: 'What needs to be done? (e.g. Accomplish house tasks)',
                           hintStyle: TextStyle(
                             color: isDark ? PlanColors.darkTextMuted : PlanColors.lightTextMuted,
                           ),
@@ -272,7 +392,7 @@ class _TaskDetailModalState extends ConsumerState<TaskDetailModal> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'PROJECT',
+                                  'PROJECT LIST',
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w700,
@@ -370,103 +490,159 @@ class _TaskDetailModalState extends ConsumerState<TaskDetailModal> {
                       ),
                       const SizedBox(height: 16),
 
-                      // Schedule & Duration Section
+                      // Compact Date & Duration Settings (TickTick style)
                       Container(
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                         decoration: BoxDecoration(
-                          color: isDark ? PlanColors.darkBg : PlanColors.lightSidebar,
+                          color: isDark ? PlanColors.darkBg : const Color(0xFFF8FAFC),
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
                             color: isDark ? PlanColors.darkBorder : PlanColors.lightBorder,
                           ),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Row(
                           children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Row(
-                                  children: [
-                                    const Icon(Icons.schedule_rounded, size: 16, color: PlanColors.primary),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      _isTimeBlocked && _scheduledStart != null
-                                          ? 'Scheduled: ${TimeUtils.formatRange(_scheduledStart!, _scheduledEnd ?? _scheduledStart!.add(Duration(minutes: _estimatedMinutes)))}'
-                                          : 'Estimated Duration: ${_estimatedMinutes}m',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                        color: isDark ? PlanColors.darkTextPrimary : PlanColors.lightTextPrimary,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                if (_isTimeBlocked)
-                                  InkWell(
-                                    onTap: () {
-                                      setState(() {
-                                        _isTimeBlocked = false;
-                                        _scheduledStart = null;
-                                        _scheduledEnd = null;
-                                      });
-                                    },
-                                    child: const Text(
-                                      'Unschedule',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.redAccent,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                              ],
+                            Text(
+                              'WHEN',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.5,
+                                color: isDark ? PlanColors.darkTextMuted : PlanColors.lightTextMuted,
+                              ),
                             ),
-                            const SizedBox(height: 10),
-
-                            // Duration quick buttons
-                            Wrap(
-                              spacing: 6,
-                              children: [15, 30, 45, 60, 90].map((mins) {
-                                final isSelected = _estimatedMinutes == mins;
-                                return InkWell(
-                                  onTap: () {
-                                    setState(() {
-                                      _estimatedMinutes = mins;
-                                      if (_scheduledStart != null) {
-                                        _scheduledEnd = _scheduledStart!.add(Duration(minutes: mins));
-                                      }
-                                    });
-                                  },
-                                  borderRadius: BorderRadius.circular(6),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: isSelected
-                                          ? PlanColors.primary
-                                          : (isDark ? PlanColors.darkCard : Colors.white),
-                                      borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(
-                                        color: isSelected
-                                          ? PlanColors.primary
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: InkWell(
+                                onTap: _pickDateTime,
+                                borderRadius: BorderRadius.circular(6),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: (_isTimeBlocked || _isAllDay)
+                                        ? PlanColors.primary.withValues(alpha: 0.12)
+                                        : (isDark ? PlanColors.darkCard : Colors.white),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: (_isTimeBlocked || _isAllDay)
+                                          ? PlanColors.primary.withValues(alpha: 0.35)
                                           : (isDark ? PlanColors.darkBorder : PlanColors.lightBorder),
-                                      ),
-                                    ),
-                                    child: Text(
-                                      TimeUtils.formatDuration(mins),
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                                        color: isSelected ? Colors.white : (isDark ? PlanColors.darkTextPrimary : PlanColors.lightTextPrimary),
-                                      ),
                                     ),
                                   ),
-                                );
-                              }).toList(),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        _isAllDay
+                                            ? Icons.wb_sunny_rounded
+                                            : (_isTimeBlocked
+                                                ? Icons.schedule_rounded
+                                                : Icons.calendar_today_rounded),
+                                        size: 14,
+                                        color: (_isTimeBlocked || _isAllDay)
+                                            ? PlanColors.primary
+                                            : (isDark ? PlanColors.darkTextSecondary : PlanColors.lightTextSecondary),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          _getScheduleSummaryText(),
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: (_isTimeBlocked || _isAllDay) ? FontWeight.w700 : FontWeight.w500,
+                                            color: (_isTimeBlocked || _isAllDay)
+                                                ? PlanColors.primary
+                                                : (isDark ? PlanColors.darkTextPrimary : PlanColors.lightTextPrimary),
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Icon(
+                                        Icons.edit_calendar_rounded,
+                                        size: 15,
+                                        color: (_isTimeBlocked || _isAllDay)
+                                            ? PlanColors.primary
+                                            : (isDark ? PlanColors.darkTextMuted : PlanColors.lightTextMuted),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
                             ),
+                            if (_isTimeBlocked || _isAllDay) ...[
+                              const SizedBox(width: 6),
+                              IconButton(
+                                icon: const Icon(Icons.clear_rounded, size: 16),
+                                tooltip: 'Clear schedule (Unschedule)',
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                                onPressed: () {
+                                  setState(() {
+                                    _isTimeBlocked = false;
+                                    _isAllDay = false;
+                                    _scheduledStart = null;
+                                    _scheduledEnd = null;
+                                    _dueDate = null;
+                                  });
+                                },
+                              ),
+                            ],
                           ],
                         ),
                       ),
+                      const SizedBox(height: 16),
+
+                      // Smart Filter Window ("Symlink Group") Section
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.link_rounded, size: 16, color: PlanColors.primary),
+                              const SizedBox(width: 6),
+                              Text(
+                                'SMART FILTER WINDOW (SYMLINK GROUP)',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: isDark ? PlanColors.darkTextMuted : PlanColors.lightTextMuted,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                          Switch.adaptive(
+                            value: _isFilterWindowEnabled,
+                            activeThumbColor: PlanColors.primary,
+                            onChanged: (val) {
+                              setState(() {
+                                _isFilterWindowEnabled = val;
+                                if (val && (_linkedProjectId == null || _linkedProjectId!.isEmpty)) {
+                                  // Default to house tasks or first non-inbox project
+                                  final houseProj = projects.where((p) => p.name.toLowerCase().contains('house')).firstOrNull;
+                                  _linkedProjectId = houseProj?.id ?? (projects.isNotEmpty ? projects.first.id : 'proj_inbox');
+                                }
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                      Text(
+                        'Point this event to a project list (e.g. 🏠House Tasks) to complete items directly from this event UI without making them subtasks.',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: isDark ? PlanColors.darkTextMuted : PlanColors.lightTextMuted,
+                        ),
+                      ),
+                      if (_isFilterWindowEnabled) ...[
+                        const SizedBox(height: 10),
+                        FilterWindowPane(
+                          eventTask: _buildPreviewTask(),
+                          onProjectFilterChanged: (newProjId) {
+                            setState(() => _linkedProjectId = newProjId);
+                          },
+                        ),
+                      ],
                       const SizedBox(height: 16),
 
                       // Notes Input
@@ -488,7 +664,7 @@ class _TaskDetailModalState extends ConsumerState<TaskDetailModal> {
                           color: isDark ? PlanColors.darkTextPrimary : PlanColors.lightTextPrimary,
                         ),
                         decoration: InputDecoration(
-                          hintText: 'Add description or checklist...',
+                          hintText: 'Add description or extra details...',
                           hintStyle: TextStyle(
                             fontSize: 13,
                             color: isDark ? PlanColors.darkTextMuted : PlanColors.lightTextMuted,
@@ -504,7 +680,7 @@ class _TaskDetailModalState extends ConsumerState<TaskDetailModal> {
                       ),
                       const SizedBox(height: 20),
 
-                      // Subtasks Section (Shown for existing tasks)
+                      // Standard Subtasks Section (Shown for existing tasks)
                       if (widget.task != null) ...[
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,

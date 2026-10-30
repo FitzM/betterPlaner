@@ -62,8 +62,8 @@ class _QuickTaskInputState extends ConsumerState<QuickTaskInput> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final projects = ref.watch(projectsStreamProvider).value ?? [];
-    final filteredProjectId = ref.watch(selectedProjectIdProvider);
+    final projects = ref.watch(projectsProvider);
+    final effectiveProjectId = widget.defaultProjectId ?? ref.watch(selectedProjectIdProvider);
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -168,7 +168,7 @@ class _QuickTaskInputState extends ConsumerState<QuickTaskInput> {
               }),
 
               // Project selector if no project is filtered
-              if (filteredProjectId == null && projects.isNotEmpty)
+              if (effectiveProjectId == null && projects.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(left: 4),
                   child: DropdownButtonHideUnderline(
@@ -195,7 +195,15 @@ class _QuickTaskInputState extends ConsumerState<QuickTaskInput> {
                                 ),
                               ),
                               const SizedBox(width: 6),
-                              Text(p.name, style: const TextStyle(fontSize: 11)),
+                              ConstrainedBox(
+                                constraints: const BoxConstraints(maxWidth: 100),
+                                child: Text(
+                                  p.name,
+                                  style: const TextStyle(fontSize: 11),
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                ),
+                              ),
                             ],
                           ),
                         );

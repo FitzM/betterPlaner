@@ -8,6 +8,7 @@ import '../../providers/project_providers.dart';
 import '../../providers/settings_provider.dart';
 import '../../providers/task_providers.dart';
 import '../tasks/task_detail_modal.dart';
+import 'day_anytime_section.dart';
 import 'scheduled_task_block.dart';
 
 class TimeSlotDropTarget extends ConsumerStatefulWidget {
@@ -27,6 +28,7 @@ class TimeSlotDropTarget extends ConsumerStatefulWidget {
 }
 
 class _TimeSlotDropTargetState extends ConsumerState<TimeSlotDropTarget> {
+  final GlobalKey _gridKey = GlobalKey();
   DateTime? _localHoverTime;
   int _localHoverDuration = 30;
   TaskItem? _hoverTask;
@@ -202,17 +204,23 @@ class _TimeSlotDropTargetState extends ConsumerState<TimeSlotDropTarget> {
             ),
           ),
 
+          // Anytime / All-Day Today Section
+          DayAnytimeSection(
+            date: widget.date,
+            width: widget.width ?? 300.0,
+          ),
+
           // Time Slots, DragTarget & Click-to-Create Area
           SizedBox(
+            key: _gridKey,
             height: totalHeight,
             child: DragTarget<TaskItem>(
               onWillAcceptWithDetails: (details) => true,
               onMove: (details) {
-                final renderBox = context.findRenderObject() as RenderBox?;
+                final renderBox = _gridKey.currentContext?.findRenderObject() as RenderBox?;
                 if (renderBox != null) {
                   final localPos = renderBox.globalToLocal(details.offset);
-                  // Subtract the header height (approx 58px)
-                  final gridY = (localPos.dy - 58).clamp(0.0, totalHeight - 10);
+                  final gridY = localPos.dy.clamp(0.0, totalHeight - 10);
                   final snapMinutes = ref.read(settingsProvider).timeSnapMinutes;
                   final snappedTime = TimeUtils.calculateTimeFromYOffset(
                     gridY,
@@ -235,10 +243,10 @@ class _TimeSlotDropTargetState extends ConsumerState<TimeSlotDropTarget> {
               },
               onAcceptWithDetails: (details) {
                 final task = details.data;
-                final renderBox = context.findRenderObject() as RenderBox?;
+                final renderBox = _gridKey.currentContext?.findRenderObject() as RenderBox?;
                 if (renderBox != null) {
                   final localPos = renderBox.globalToLocal(details.offset);
-                  final gridY = (localPos.dy - 58).clamp(0.0, totalHeight - 10);
+                  final gridY = localPos.dy.clamp(0.0, totalHeight - 10);
                   final snapMinutes = ref.read(settingsProvider).timeSnapMinutes;
                   final startTime = TimeUtils.calculateTimeFromYOffset(
                     gridY,
@@ -374,45 +382,44 @@ class _TimeSlotDropTargetState extends ConsumerState<TimeSlotDropTarget> {
                           dragSelectEnd.difference(dragSelectStart).inMinutes,
                           hourHeight: widget.hourHeight,
                         ),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: PlanColors.primary.withValues(alpha: 0.22),
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(
-                              color: PlanColors.primary,
-                              width: 1.5,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: PlanColors.primary.withValues(alpha: 0.2),
-                                blurRadius: 6,
-                                offset: const Offset(0, 2),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: PlanColors.primary.withValues(alpha: 0.22),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: PlanColors.primary,
+                                width: 1.5,
                               ),
-                            ],
-                          ),
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Row(
+                              boxShadow: [
+                                BoxShadow(
+                                  color: PlanColors.primary.withValues(alpha: 0.2),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
                                   const Icon(Icons.add_rounded, size: 12, color: PlanColors.primary),
                                   const SizedBox(width: 4),
-                                  Expanded(
-                                    child: Text(
-                                      '${TimeUtils.formatRange(dragSelectStart, dragSelectEnd)} (${TimeUtils.formatDuration(dragSelectEnd.difference(dragSelectStart).inMinutes)})',
-                                      style: const TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w700,
-                                        color: PlanColors.primary,
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
+                                  Text(
+                                    '${TimeUtils.formatRange(dragSelectStart, dragSelectEnd)} (${TimeUtils.formatDuration(dragSelectEnd.difference(dragSelectStart).inMinutes)})',
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      color: PlanColors.primary,
                                     ),
                                   ),
                                 ],
                               ),
-                            ],
+                            ),
                           ),
                         ),
                       ),

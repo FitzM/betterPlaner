@@ -27,7 +27,7 @@ final projectsStreamProvider = StreamProvider<List<ProjectItem>>((ref) {
 final projectsProvider = Provider<List<ProjectItem>>((ref) {
   final projectsAsync = ref.watch(projectsStreamProvider);
   return projectsAsync.maybeWhen(
-    data: (projects) => projects,
+    data: (projects) => projects.where((p) => p.isValidProjectName).toList(),
     orElse: () => [],
   );
 });

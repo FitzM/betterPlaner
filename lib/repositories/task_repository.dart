@@ -11,6 +11,8 @@ abstract class TaskRepository {
   Future<void> toggleTaskComplete(String taskId);
   Future<void> scheduleTask(String taskId, DateTime start, DateTime end);
   Future<void> unscheduleTask(String taskId);
+  Future<void> addAllTasks(List<TaskItem> tasks);
+  Future<void> replaceAllTasks(List<TaskItem> tasks);
 }
 
 class LocalTaskRepository implements TaskRepository {
@@ -97,5 +99,25 @@ class LocalTaskRepository implements TaskRepository {
       );
       _emit();
     }
+  }
+
+  @override
+  Future<void> addAllTasks(List<TaskItem> tasks) async {
+    for (final task in tasks) {
+      final index = _tasks.indexWhere((t) => t.id == task.id);
+      if (index != -1) {
+        _tasks[index] = task;
+      } else {
+        _tasks.add(task);
+      }
+    }
+    _emit();
+  }
+
+  @override
+  Future<void> replaceAllTasks(List<TaskItem> tasks) async {
+    _tasks.clear();
+    _tasks.addAll(tasks);
+    _emit();
   }
 }

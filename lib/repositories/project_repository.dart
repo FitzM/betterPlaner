@@ -8,6 +8,8 @@ abstract class ProjectRepository {
   Future<void> addProject(ProjectItem project);
   Future<void> updateProject(ProjectItem project);
   Future<void> deleteProject(String projectId);
+  Future<void> addAllProjects(List<ProjectItem> projects);
+  Future<void> replaceAllProjects(List<ProjectItem> projects);
 }
 
 class LocalProjectRepository implements ProjectRepository {
@@ -51,6 +53,26 @@ class LocalProjectRepository implements ProjectRepository {
   @override
   Future<void> deleteProject(String projectId) async {
     _projects.removeWhere((p) => p.id == projectId && !p.isDefault);
+    _emit();
+  }
+
+  @override
+  Future<void> addAllProjects(List<ProjectItem> projects) async {
+    for (final p in projects) {
+      final index = _projects.indexWhere((item) => item.id == p.id);
+      if (index != -1) {
+        _projects[index] = p;
+      } else {
+        _projects.add(p);
+      }
+    }
+    _emit();
+  }
+
+  @override
+  Future<void> replaceAllProjects(List<ProjectItem> projects) async {
+    _projects.clear();
+    _projects.addAll(projects);
     _emit();
   }
 }

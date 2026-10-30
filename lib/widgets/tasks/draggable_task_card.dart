@@ -5,7 +5,6 @@ import '../../core/utils/time_utils.dart';
 import '../../models/task_item.dart';
 import '../../providers/project_providers.dart';
 import '../../providers/task_providers.dart';
-import 'task_detail_modal.dart';
 
 class DraggableTaskCard extends ConsumerWidget {
   final TaskItem task;
@@ -18,14 +17,15 @@ class DraggableTaskCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final projectMap = ref.watch(projectMapProvider);
-    final project = projectMap[task.projectId];
+    final project = ref.watch(projectMapProvider.select((m) => m[task.projectId]));
     final projectColor = project?.color ?? PlanColors.projectPalette[0];
 
-    final parentTask = task.parentTaskId != null
-        ? ref.watch(parentTaskProvider(task.parentTaskId))
+    final parentTask = task.parentTaskId != null && task.parentTaskId!.isNotEmpty
+        ? ref.watch(taskMapProvider.select((m) => m[task.parentTaskId!]))
         : null;
-    final subtasks = ref.watch(subtasksForParentProvider(task.id));
+    final subtasks = task.isChecklist
+        ? (ref.watch(subtaskMapProvider.select((m) => m[task.id])) ?? const <TaskItem>[])
+        : const <TaskItem>[];
 
     final cardContent = Container(
       margin: const EdgeInsets.symmetric(vertical: 4),
@@ -76,12 +76,25 @@ class DraggableTaskCard extends ConsumerWidget {
           ),
           const SizedBox(width: 10),
 
-          // Title & Project Tag (Clickable to open Task Detail Modal)
+          // Title & Project Tag (Clickable to open floating inspector overlay)
           Expanded(
-            child: InkWell(
-              onTap: () => TaskDetailModal.show(context, task: task),
-              borderRadius: BorderRadius.circular(4),
-              child: Column(
+            child: Builder(
+              builder: (cardContext) => InkWell(
+                onTap: () {
+                  final renderBox = cardContext.findRenderObject() as RenderBox?;
+                  Rect? anchorRect;
+                  if (renderBox != null && renderBox.hasSize) {
+                    final offset = renderBox.localToGlobal(Offset.zero);
+                    anchorRect = offset & renderBox.size;
+                  }
+                  ref.read(activeInspectorSessionProvider.notifier).openTask(
+                        task.id,
+                        source: InspectorSource.taskBar,
+                        anchorRect: anchorRect,
+                      );
+                },
+                borderRadius: BorderRadius.circular(4),
+                child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -173,6 +186,54 @@ class DraggableTaskCard extends ConsumerWidget {
                               ),
                             ],
                           ),
+                        )
+                      else if (task.isAnytimeForDate(DateTime.now()))
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.withValues(alpha: 0.16),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Icon(Icons.wb_sunny_rounded, size: 10, color: Colors.orange),
+                              SizedBox(width: 3),
+                              Text(
+                                'Today (Anytime)',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.orange,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                      // Filter Window symlink indicator
+                      if (task.hasLinkedFilter)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: PlanColors.primary.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Icon(Icons.link_rounded, size: 10, color: PlanColors.primary),
+                              SizedBox(width: 3),
+                              Text(
+                                'Filter Window',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: PlanColors.primary,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
 
                       // Subtask of parent indicator
@@ -234,6 +295,34 @@ class DraggableTaskCard extends ConsumerWidget {
               ),
             ),
           ),
+        ),
+
+          // Set for Today (Anytime) button
+          IconButton(
+            icon: Icon(
+              task.isAnytimeForDate(DateTime.now())
+                  ? Icons.wb_sunny_rounded
+                  : Icons.wb_sunny_outlined,
+              size: 15,
+              color: task.isAnytimeForDate(DateTime.now())
+                  ? Colors.orange
+                  : (isDark ? PlanColors.darkTextMuted : PlanColors.lightTextMuted),
+            ),
+            splashRadius: 14,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            tooltip: task.isAnytimeForDate(DateTime.now())
+                ? 'Remove from Today'
+                : 'Set for Today (Anytime)',
+            onPressed: () {
+              if (task.isAnytimeForDate(DateTime.now())) {
+                ref.read(taskControllerProvider).unscheduleTask(task.id);
+              } else {
+                ref.read(taskControllerProvider).setTaskForDateAnytime(task.id, DateTime.now());
+              }
+            },
+          ),
+          const SizedBox(width: 6),
 
           // Delete or Unschedule button
           if (task.isTimeBlocked)

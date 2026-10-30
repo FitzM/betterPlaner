@@ -47,6 +47,18 @@ class FirestoreProjectRepository implements ProjectRepository {
   Future<void> deleteProject(String projectId) async {
     await _collection.doc(projectId).delete();
   }
+
+  @override
+  Future<void> addAllProjects(List<ProjectItem> projects) async {
+    for (final project in projects) {
+      await _collection.doc(project.id).set(project.toJson());
+    }
+  }
+
+  @override
+  Future<void> replaceAllProjects(List<ProjectItem> projects) async {
+    await addAllProjects(projects);
+  }
 }
 
 class FirestoreTaskRepository implements TaskRepository {
@@ -125,5 +137,17 @@ class FirestoreTaskRepository implements TaskRepository {
       'scheduledStart': null,
       'scheduledEnd': null,
     });
+  }
+
+  @override
+  Future<void> addAllTasks(List<TaskItem> tasks) async {
+    for (final task in tasks) {
+      await _collection.doc(task.id).set(task.toJson());
+    }
+  }
+
+  @override
+  Future<void> replaceAllTasks(List<TaskItem> tasks) async {
+    await addAllTasks(tasks);
   }
 }

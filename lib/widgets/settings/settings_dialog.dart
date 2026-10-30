@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/plan_colors.dart';
 import '../../providers/calendar_providers.dart';
 import '../../providers/settings_provider.dart';
+import 'firebase_setup_dialog.dart';
+import 'ticktick_import_dialog.dart';
 
 class SettingsDialog extends ConsumerWidget {
   const SettingsDialog({super.key});
@@ -146,6 +148,52 @@ class SettingsDialog extends ConsumerWidget {
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                         color: PlanColors.primary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+
+              // Setting 3: Integrations & Cloud Sync
+              Text(
+                'DATA & CLOUD SYNC',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? PlanColors.darkTextMuted : PlanColors.lightTextMuted,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        TickTickImportDialog.show(context);
+                      },
+                      icon: const Icon(Icons.download_rounded, size: 16, color: Color(0xFF388E3C)),
+                      label: const Text('Import TickTick', style: TextStyle(fontSize: 12)),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        FirebaseSetupDialog.show(context);
+                      },
+                      icon: const Icon(Icons.cloud_sync_outlined, size: 16, color: PlanColors.primary),
+                      label: const Text('Firebase Setup', style: TextStyle(fontSize: 12)),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
                     ),
                   ),

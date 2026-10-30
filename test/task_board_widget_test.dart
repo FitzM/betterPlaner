@@ -32,8 +32,7 @@ void main() {
     expect(find.byType(TaskBoardPane), findsOneWidget);
 
     // Verify project columns exist in TaskBoardPane
-    expect(find.text('Work'), findsWidgets);
-    expect(find.text('Personal'), findsWidgets);
+    expect(find.text('Inbox'), findsWidgets);
 
     // Verify 1-column calendar rail is rendered on the right
     expect(find.byType(CalendarGridPane), findsOneWidget);
